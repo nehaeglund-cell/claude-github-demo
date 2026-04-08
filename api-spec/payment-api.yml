@@ -1,0 +1,521 @@
+openapi: "3.0.3"
+info:
+  title: Payment API
+  version: 0.1.0
+  description: Payment API for processing customer payments with support for multiple payment types.
+  contact:
+    name: PayControl Team
+    email: support@paycontrol.xyz
+    url: https://paycontrol.xyz/
+servers:
+  - url: https://api.example.com
+    description: Development server
+  - url: http://localhost:8080
+    description: Local server
+tags:
+  - name: Payment
+    description: Payment operations
+paths:
+  /payment-types:
+    get:
+      summary: Get available payment types
+      description: |
+        Returns a list of available payment types for a merchant
+      operationId: getPaymentTypes
+      tags:
+        - Payment
+      parameters:
+        - name: merchantId
+          in: query
+          description: Merchant ID
+          required: true
+          schema:
+            type: string
+        - name: method
+          in: query
+          description: Method
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          description: User ID
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: currency
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of available payment types
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentTypesResponse'
+        '409':
+          description: Conflict - merchant is not configured for payments yet
+        '401':
+          description: Unauthorised - session rejected by merchant
+        '502':
+          description: Bad gateway - unable to reach merchant's Integration API
+  /payment/{paymentType}/{method}:
+    post:
+      summary: Create a payment
+      description: |
+        Create a payment
+      operationId: createPayment
+      tags:
+        - Payment
+      parameters:
+        - name: paymentType
+          in: path
+          description: Payment type (e.g., 'card', 'bank', 'redirect')
+          required: true
+          schema:
+            $ref: './common_schemas.yaml#/components/schemas/PaymentType'
+        - name: method
+          in: path
+          description: Transaction direction - 'payin' for receiving money from customer, 'payout' for sending money to customer
+          required: true
+          schema:
+            $ref: './common_schemas.yaml#/components/schemas/PaymentMethod'
+      requestBody:
+        description: Payment object
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentsRequest'
+      responses:
+        '200':
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentsResponse'
+  /payment/status/{paymentId}:
+    get:
+      summary: Get payment status (polling or SSE)
+      description: |
+        Returns payment status. Without ?stream parameter returns JSON response (polling mode).
+        With ?stream=true returns Server-Sent Events stream for real-time updates.
+      operationId: getPaymentStatus
+      tags:
+        - Payment
+      parameters:
+        - name: paymentId
+          in: path
+          description: Payment ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: merchantId
+          in: query
+          description: Merchant ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: query
+          description: User ID for session validation
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: query
+          description: Session ID for validation
+          required: true
+          schema:
+            type: string
+        - name: stream
+          in: query
+          description: If true, establishes SSE connection for real-time updates
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: |
+            Without stream: Payment status as JSON.
+            With stream: SSE connection (text/event-stream)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatusResponse'
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/PaymentStatusResponse'
+                description: SSE stream of PaymentStatusResponse events
+        '401':
+          description: Invalid session - session rejected by merchant
+        '404':
+          description: Payment not found or not yet created
+        '502':
+          description: Bad gateway - unable to reach merchant's Integration API
+  /payment/summary/{paymentId}:
+    get:
+      summary: Get payment summary
+      description: |
+        Returns a summary of a completed payment
+      operationId: getPaymentSummary
+      tags:
+        - Payment
+      parameters:
+        - name: paymentId
+          in: path
+          description: Payment ID
+          required: true
+          schema:
+            type: string
+        - name: merchantId
+          in: query
+          description: Merchant ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Summary of a completed payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSummaryResponse'
+        '404':
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /i18n:
+    get:
+      summary: Get internationalization texts and formatting options
+      description: |
+        Returns a list of internationalization texts and formatting options
+      operationId: getI18n
+      tags:
+        - UI
+      parameters:
+        - name: merchantId
+          in: query
+          description: Merchant ID
+          required: true
+          schema:
+            type: string
+        - name: locale
+          in: query
+          description: Target locale for texts
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of internationalization texts and formatting options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/I18nResponse'
+  /account/delete:
+    post:
+      summary: Delete a saved account
+      description: |
+        Deletes a saved account by setting its visible flag to false.
+        The account is not physically deleted, allowing continued payment tracking.
+        If the user reuses the same account details, the account becomes visible again.
+      operationId: deleteAccount
+      tags:
+        - Account
+      parameters:
+        - name: merchantId
+          in: query
+          description: Merchant ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: query
+          description: User ID
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: query
+          description: Session ID for validation
+          required: true
+          schema:
+            type: string
+        - name: accountId
+          in: query
+          description: Account ID to delete
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Account deleted successfully
+        '400':
+          description: Bad request (invalid parameters)
+        '401':
+          description: Session validation failed - session rejected by merchant
+        '404':
+          description: Account not found
+        '502':
+          description: Bad gateway - unable to reach merchant's Integration API
+
+components:
+  schemas:
+    PaymentsRequest:
+      type: object
+      required:
+        - merchantId
+        - sessionId
+        - userId
+      properties:
+        merchantId:
+          type: string
+          description: Merchant ID
+        sessionId:
+          type: string
+        userId:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+          description: Currency code. If provided, overrides the default currency for the user.
+        accountId:
+          type: string
+          description: ID of the account to use for the payment
+        bonusCode:
+          type: string
+          description: Optional bonus code to apply to the payment
+        extra:
+          type: object
+          additionalProperties:
+            type: string
+          description: Merchant specific information about the payment
+        merchantRequestId:
+          type: string
+          description: Optional client-provided request ID for tracking/idempotency
+        service:
+          type: string
+          description: Custom service identifier for the payment
+        locales:
+          type: array
+          items:
+            type: string
+          description: |
+            Locale/language preferences for the payment flow (BCP47 format), in order of preference.
+            If not provided, defaults to the Accept-Language header.
+            Used by payment providers to localise payment pages and communications.
+            Examples: ["en-GB", "de-DE"]
+          example: ["en-GB"]
+        threeds:
+          $ref: './common_schemas.yaml#/components/schemas/ThreeDSBrowserData'
+        input:
+          type: object
+          additionalProperties:
+            type: string
+          description: User input, e.g. saveAccount, card holder name
+    PaymentsResponse:
+      type: object
+      properties:
+        paymentId:
+          type: string
+        paymentStatus:
+          type: string
+        redirect:
+          $ref: './common_schemas.yaml#/components/schemas/RedirectData'
+    PaymentStatusResponse:
+      type: object
+      required:
+        - paymentId
+        - status
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [ongoing, done]
+          description: Status indicating whether the user flow is still ongoing or done
+        redirect:
+          $ref: './common_schemas.yaml#/components/schemas/RedirectData'
+          description: Present when payment requires user redirect action (e.g., 3DS)
+        form:
+          $ref: './common_schemas.yaml#/components/schemas/FormData'
+          description: Present when payment requires user input via a form
+    PaymentTypesResponse:
+      type: object
+      properties:
+        currency:
+          type: string
+          description: Currency code applicable to all payment types and limits in this response
+        pciTenantId:
+          type: string
+          description: Tenant ID for PCI-compliant hosted fields tokenization
+        paymentTypes:
+          type: array
+          description: Flat list of payment types and their accounts. Accounts are distinguished by having accountId set.
+          items:
+            $ref: '#/components/schemas/PaymentType'
+    PaymentType:
+      type: object
+      required:
+        - name
+        - type
+        - typeId
+        - method
+      properties:
+        name:
+          type: string
+          description: Name of the payment type or account display name
+        type:
+          type: string
+          description: Short string identifier (ie 'card', 'bank', 'applepay' etc) used when creating payment
+        typeId:
+          type: integer
+          description: Numerical ID of the payment type
+        method:
+          type: string
+          description: Transaction method (ie 'payin' or 'payout')
+        logo:
+          type: object
+          additionalProperties:
+            type: string
+          description: Map of logo variants keyed by theme (e.g., default, dark, compact-default, compact-dark)
+        accountId:
+          type: string
+          description: Unique identifier for the account. When set, this item represents a saved account rather than a payment type.
+        service:
+          type: string
+          description: Custom service identifier
+        fields:
+          type: array
+          description: List of input fields for this payment type or account
+          items:
+            $ref: '#/components/schemas/PaymentField'
+        notifications:
+          type: array
+          description: List of notifications for this payment type or account
+          items:
+            $ref: '#/components/schemas/FieldNotification'
+        limits:
+          type: object
+          description: Payment amount limits for this payment type
+          properties:
+            min:
+              type: string
+              description: Minimum allowed amount
+            max:
+              type: string
+              description: Maximum allowed amount
+        fee:
+          type: object
+          description: Fee configuration for this payment type
+          properties:
+            feeType:
+              type: string
+              enum: [fixed, percentage]
+              description: Type of fee (fixed amount or percentage)
+            value:
+              type: string
+              description: Fee value (e.g., "5.00" for fixed or "2.5" for percentage)
+            direction:
+              type: string
+              enum: [add, deduct]
+              description: Whether fee is added on top of amount or deducted from it
+        lastSuccessful:
+          type: string
+          format: date-time
+          description: Timestamp of last successful payment with this type or account
+    PaymentField:
+      $ref: './common_schemas.yaml#/components/schemas/PaymentField'
+    PaymentSummaryField:
+      type: object
+      required:
+        - id
+        - label
+        - value
+      properties:
+        id:
+          type: string
+          description: ID of field
+        label:
+          type: string
+          description: Label of field
+        value:
+          oneOf:
+            - type: string
+            - type: object
+          description: Value of field - can be string or object
+    FieldValidation:
+      $ref: './common_schemas.yaml#/components/schemas/FieldValidation'
+    BooleanValidation:
+      $ref: './common_schemas.yaml#/components/schemas/BooleanValidation'
+    ValidationRule:
+      $ref: './common_schemas.yaml#/components/schemas/ValidationRule'
+    FieldNotification:
+      $ref: './common_schemas.yaml#/components/schemas/FieldNotification'
+    I18nResponse:
+      type: object
+      properties:
+        texts:
+          type: object
+          additionalProperties:
+            type: string
+          description: Dot-notation key-value pairs of internationalization texts
+          example:
+            payment.success: "Payment successful"
+            payment.error: "Payment failed"
+    PaymentSummaryResponse:
+      type: object
+      required:
+        - paymentStatus
+      properties:
+        paymentStatus:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+          description: Array of i18n message keys from payment_summary decision
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentSummaryField'
+      example:
+        paymentStatus: "failed"
+        messages:
+          - "payment.error.insufficient_funds"
+        fields:
+          - id: "amount"
+            label: "field.amount.summary"
+            value: "100.00"
+          - id: "account"
+            label: "field.account.summary"
+            value: "**** **** **** 4242"
+    Method:
+      type: string
+      example: process
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: integer
+          description: Error code
