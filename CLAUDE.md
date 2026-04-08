@@ -243,7 +243,7 @@ When reviewing changes to this repository, enforce the following:
 - **Issue creation must remain opt-in** — `PENTEST_CREATE_ISSUES=true` must only appear in `nightly-pentest.yml`, never in PR or branch workflows.
 - **Stripe and Payment API steps must stay separate** — they cannot share `PENTEST_BASE_URL`; adding a third target requires a new step with its own `env:` block.
 - **`if: always()`** must be set on the Stripe step so payment API failures do not suppress Stripe results.
-- **Surefire includes** — any new test class not ending in `Test` (e.g. `Suite`, `Runner`) must be added to the `<includes>` block in `pom.xml`.
+- **Surefire includes** — all test classes must end in `Test` to be discovered by the JUnit Platform provider. The `**/*Suite.java` Surefire pattern does not work with JUnit Platform's class discovery.
 
 ### Code style
 - **Records over POJOs** — use Java records for immutable data carriers (`ApiEndpoint`, `ApiParameter`, `Failure`).
