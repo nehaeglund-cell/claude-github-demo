@@ -59,27 +59,45 @@ jobs:
 
       - name: Review PR with Claude
         uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
+          claude_args: >-
+            --allowed-tools
+            Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr review:*),Bash(gh issue create:*),Bash(gh issue list:*),Read
           prompt: |
-            /code-review:code-review ${{ github.repository }}/pull/${{ matrix.pr_number }}
+            Review PR #${{ matrix.pr_number }} in repository ${{ github.repository }}.
 
-            This is a security-focused pentest suite (see CLAUDE.md for full context).
-            When reviewing, apply the rules from the "Code Review Rules" section in CLAUDE.md,
-            which includes severity labels ([BLOCKING] / [ADVISORY] / [NIT]) and covers:
+            Steps:
+            1. Read the PR metadata:
+               gh pr view ${{ matrix.pr_number }} --repo ${{ github.repository }} --json title,body,author,files,labels
+            2. Read the full diff:
+               gh pr diff ${{ matrix.pr_number }} --repo ${{ github.repository }}
+            3. Read CLAUDE.md for the "Code Review Rules" section — it defines severity labels
+               ([BLOCKING] / [ADVISORY] / [NIT]) and rules across four areas:
+               - Security: IDOR ownership checks, session validation, hardcoded secrets, CORS
+               - Test quality: realistic probe params, intentional-failure docs, no bare assumeTrue(false)
+               - CI / workflow: PENTEST_CREATE_ISSUES opt-in, separate Stripe/Payment API steps,
+                 -Dgroups not -DexcludedGroups only, test classes ending in *Test
+               - Code style: records, switch expressions, no checked exceptions in @TestFactory lambdas,
+                 var for local variables, List.of()/Map.of() for immutable collections,
+                 no System.out.println (use SLF4J), streams over imperative loops, no magic numbers
 
-            1. Security — IDOR ownership checks, session validation, hardcoded secrets, CORS
-            2. Test quality — realistic probe params, intentional-failure documentation,
-               no bare assumeTrue(false)
-            3. CI / workflow — PENTEST_CREATE_ISSUES opt-in, separate Stripe/Payment API steps,
-               -Dgroups not -DexcludedGroups only, test classes ending in *Test
-            4. Code style — records, switch expressions, no checked exceptions in @TestFactory lambdas
-
-            Known intentional failures (do NOT flag as bugs):
+            Known intentional failures — do NOT flag these as bugs:
             - Stripe SSRF tests fail in CI by design — they surface the finding
             - IDOR / session tests fail against staging — the API has those vulnerabilities
 
-            End your review with a one-line verdict: APPROVE, REQUEST_CHANGES, or COMMENT.
+            4. Write a review body with:
+               - A brief summary of the change
+               - All findings grouped by [BLOCKING] / [ADVISORY] / [NIT], each with the file and line
+               - A final one-line verdict
+
+            5. Post the review to the PR:
+               - Any [BLOCKING] finding:
+                 gh pr review ${{ matrix.pr_number }} --repo ${{ github.repository }} --request-changes --body "<review body>"
+               - Only [ADVISORY] or [NIT] findings:
+                 gh pr review ${{ matrix.pr_number }} --repo ${{ github.repository }} --comment --body "<review body>"
+               - No findings at all:
+                 gh pr review ${{ matrix.pr_number }} --repo ${{ github.repository }} --approve --body "LGTM — no issues found."
           show_full_output: true
