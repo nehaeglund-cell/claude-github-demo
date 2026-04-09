@@ -262,3 +262,8 @@ Post a top-level summary at the end of the review: `APPROVE`, `REQUEST_CHANGES` 
 - **Switch expressions over if-else chains** — use `switch (operationId)` in template classes; add a `default -> {}` branch explicitly.
 - **No checked exceptions in test helpers** — wrap in `RuntimeException` or use `assertDoesNotThrow`; checked exceptions in `@TestFactory` lambdas break the test tree silently.
 - **Template classes must be `final` with private constructors** — they are stateless utility classes, not meant to be instantiated or extended.
+- **`var` for local variables** — use `var` instead of explicit types for local variable declarations where the type is obvious from the right-hand side (e.g., `var list = new ArrayList<String>()` not `ArrayList<String> list = ...`).
+- **Immutable collections** — use `List.of()`, `Map.of()`, `Set.of()` for fixed-size collections; never `new ArrayList<>()` or `new HashMap<>()` when the collection is not mutated after creation.
+- **No `System.out.println`** — use SLF4J (`log.info(...)`, `log.warn(...)`) for all logging; bare print statements are invisible in CI and pollute test output.
+- **Streams over imperative loops** — prefer `stream().filter().map().collect()` over `for`-loops that accumulate into a mutable list; exception only when stream legibility suffers (e.g., multi-step stateful aggregation).
+- **No magic numbers** — extract numeric literals that encode business meaning into named constants (`private static final int MAX_RETRIES = 3`); raw literals in assertions are acceptable only when the value is self-evident (e.g., `200`, `404`).
