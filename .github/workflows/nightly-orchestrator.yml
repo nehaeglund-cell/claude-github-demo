@@ -1,12 +1,15 @@
 name: Nightly AI Orchestrator
 
 # Single entry point for all nightly AI jobs.
-# Claude acts as the orchestration agent: it triggers each nightly workflow,
-# waits for results, and posts a morning briefing issue summarising findings.
+# Sub-workflows are called via workflow_call (reusable workflows) — this is the
+# only way to trigger other workflows from GITHUB_TOKEN without a PAT, since
+# GitHub blocks workflow_dispatch cross-triggers to prevent recursive loops.
 #
 # To add a new nightly job in future:
-#   1. Create the workflow file (e.g. nightly-dependency-audit.yml)
-#   2. Add its name to the "Workflows to run" list in the prompt below
+#   1. Create the workflow file with "on: workflow_call" in its triggers
+#   2. Add a job below that calls it with "uses: ./.github/workflows/<name>.yml"
+#   3. Add it to the "needs:" list of the morning-briefing job
+#   4. Mention it in the Claude prompt
 
 on:
   schedule:
@@ -14,14 +17,38 @@ on:
   workflow_dispatch:
 
 jobs:
-  orchestrate:
-    name: Claude Nightly Orchestrator
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Nightly jobs — run in parallel
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  pentest:
+    name: Payment API Pentest
+    uses: ./.github/workflows/nightly-pentest.yml
+    secrets: inherit
+
+  pr-review:
+    name: PR Review
+    uses: ./.github/workflows/nightly-pr-review.yml
+    secrets: inherit
+
+  dependency-audit:
+    name: Dependency Audit
+    uses: ./.github/workflows/nightly-dependency-audit.yml
+    secrets: inherit
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Morning briefing — Claude reads all results and creates a summary issue
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  morning-briefing:
+    name: Morning Briefing
+    needs: [pentest, pr-review, dependency-audit]
+    if: always()   # run even if one of the nightly jobs failed
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write    # post the morning briefing issue
-      actions: write   # trigger and read nightly workflow runs
-      id-token: write  # required by claude-code-action to obtain an OIDC token
+      issues: write
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -29,7 +56,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Run Claude as orchestration agent
+      - name: Create morning briefing with Claude
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -37,41 +64,31 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: >-
             --allowed-tools
-            Bash(gh workflow run:*),Bash(gh run list:*),Bash(gh run view:*),Bash(gh issue create:*),Bash(sleep:*),Bash(date:*)
+            Bash(gh issue create:*),Bash(gh issue list:*),Bash(gh run view:*),Bash(date:*)
           prompt: |
-            You are the nightly AI orchestration agent for ${{ github.repository }}.
+            You are the morning briefing agent for ${{ github.repository }}.
             Today's date: $(date -u +%Y-%m-%d).
 
-            ## Workflows to run
-            Trigger these three workflows in parallel, then wait for all to finish:
-            - nightly-pentest.yml
-            - nightly-pr-review.yml
-            - nightly-dependency-audit.yml
+            The three nightly jobs have just completed with these results:
+            - Pentest:           ${{ needs.pentest.result }}
+            - PR Review:         ${{ needs.pr-review.result }}
+            - Dependency Audit:  ${{ needs.dependency-audit.result }}
 
-            ## Steps
+            Steps:
+            1. Check if a morning briefing issue for today already exists to avoid duplicates:
+               gh issue list --repo ${{ github.repository }} --search "Nightly AI Report $(date -u +%Y-%m-%d)" --json number --jq length
+               If count > 0, skip issue creation.
 
-            1. **Trigger both workflows simultaneously** using:
-               gh workflow run <name> --repo ${{ github.repository }}
-               Capture the run ID for each by immediately running:
-               gh run list --repo ${{ github.repository }} --workflow <name> --limit 1 --json databaseId --jq '.[0].databaseId'
+            2. Read the recent GitHub issues to find any new findings created overnight
+               (pentest vulnerabilities, CVEs, PR review BLOCKING items):
+               gh issue list --repo ${{ github.repository }} --state open --limit 20 --json number,title,labels,createdAt
 
-            2. **Poll until both runs complete** (check every 30 seconds):
-               gh run view <run-id> --repo ${{ github.repository }} --json status,conclusion --jq '{status,conclusion}'
-               A run is done when status == "completed".
-
-            3. **Read results** for each completed run:
-               gh run view <run-id> --repo ${{ github.repository }} --json conclusion,jobs
-               Note: conclusions are "success", "failure", or "cancelled".
-
-            4. **Create a morning briefing issue** titled:
+            3. Create a morning briefing issue titled:
                "🌙 Nightly AI Report — $(date -u +%Y-%m-%d)"
-               with labels: ["nightly-report"]
-               Body should include:
-               - Pentest run: conclusion + count of failed tests if available
-               - PR Review run: conclusion + list of PRs reviewed if available
-               - Dependency audit: conclusion + count of CRITICAL/HIGH CVEs found
-               - Any BLOCKING findings from any workflow
-               - Recommended actions for the day
-
-            Keep the issue body concise — bullet points, no walls of text.
+               Labels: nightly-report
+               Body (bullet points, concise):
+               - **Pentest**: ${{ needs.pentest.result }} — note any new vulnerability issues opened
+               - **PR Review**: ${{ needs.pr-review.result }} — note any BLOCKING findings
+               - **Dependency Audit**: ${{ needs.dependency-audit.result }} — note any new CVE issues
+               - **Recommended actions**: what @neha-eglund should look at today
           show_full_output: true

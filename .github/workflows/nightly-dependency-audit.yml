@@ -4,7 +4,8 @@ name: Nightly Dependency Audit
 # then uses Claude to triage findings and create GitHub issues for HIGH/CRITICAL vulnerabilities.
 
 on:
-  workflow_dispatch:   # triggered by nightly-orchestrator.yml or manually
+  workflow_dispatch:   # triggered manually or by nightly-orchestrator.yml
+  workflow_call:       # called directly by nightly-orchestrator.yml
 
 jobs:
   audit:
