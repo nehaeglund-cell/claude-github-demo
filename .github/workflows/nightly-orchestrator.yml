@@ -15,6 +15,19 @@ on:
   schedule:
     - cron: '0 2 * * *'   # 02:00 UTC every night
   workflow_dispatch:
+    inputs:
+      run_pentest:
+        description: '1. Payment API Pentest'
+        type: boolean
+        default: true
+      run_pr_review:
+        description: '2. PR Review'
+        type: boolean
+        default: true
+      run_dependency_audit:
+        description: '3. Dependency Audit'
+        type: boolean
+        default: true
 
 # Top-level permissions are the ceiling for all called workflows.
 # Each sub-workflow's job-level permissions are further restricted within these.
@@ -27,21 +40,26 @@ permissions:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
-  # Nightly jobs — run in parallel
+  # Nightly jobs — run in parallel; each can be toggled off via workflow_dispatch
+  # inputs. When triggered by schedule all three run unconditionally.
   # ─────────────────────────────────────────────────────────────────────────────
 
   pentest:
     name: Payment API Pentest
+    # Run when: scheduled (inputs empty) OR manually with run_pentest = true
+    if: ${{ github.event_name == 'schedule' || inputs.run_pentest == true }}
     uses: ./.github/workflows/nightly-pentest.yml
     secrets: inherit
 
   pr-review:
     name: PR Review
+    if: ${{ github.event_name == 'schedule' || inputs.run_pr_review == true }}
     uses: ./.github/workflows/nightly-pr-review.yml
     secrets: inherit
 
   dependency-audit:
     name: Dependency Audit
+    if: ${{ github.event_name == 'schedule' || inputs.run_dependency_audit == true }}
     uses: ./.github/workflows/nightly-dependency-audit.yml
     secrets: inherit
 
@@ -52,7 +70,7 @@ jobs:
   morning-briefing:
     name: Morning Briefing
     needs: [pentest, pr-review, dependency-audit]
-    if: always()   # run even if one of the nightly jobs failed
+    if: always()   # run even if some nightly jobs failed or were skipped
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -111,6 +129,8 @@ jobs:
             - Pentest:           ${{ needs.pentest.result }}
             - PR Review:         ${{ needs.pr-review.result }}
             - Dependency Audit:  ${{ needs.dependency-audit.result }}
+
+            (A result of "skipped" means the job was disabled for this run via workflow_dispatch inputs.)
 
             Steps:
             1. Check if a morning briefing issue for today already exists to avoid duplicates:
