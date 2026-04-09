@@ -244,6 +244,7 @@ When reviewing changes to this repository, enforce the following:
 - **Stripe and Payment API steps must stay separate** — they cannot share `PENTEST_BASE_URL`; adding a third target requires a new step with its own `env:` block.
 - **`if: always()`** must be set on the Stripe step so payment API failures do not suppress Stripe results.
 - **Surefire includes** — all test classes must end in `Test` to be discovered by the JUnit Platform provider. The `**/*Suite.java` Surefire pattern does not work with JUnit Platform's class discovery.
+- **Use explicit `-Dgroups` not exclusion-only `-DexcludedGroups`** — with exclusion-only tag filters, JUnit Platform silently drops untagged `@TestFactory` classes from the test plan. Always pair a `@Tag` on the class with a matching `-Dgroups=<tag>` in the Maven command. The Stripe step (`-Dgroups=stripe`) works; the Payment API step must use `-Dgroups=spec-driven` for the same reason.
 
 ### Code style
 - **Records over POJOs** — use Java records for immutable data carriers (`ApiEndpoint`, `ApiParameter`, `Failure`).
