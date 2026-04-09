@@ -47,13 +47,14 @@ jobs:
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
-          mvn org.owasp:dependency-check-maven:check \
-            -DfailBuildOnCVSS=11 \
-            -Dformat=JSON \
-            -DprettyPrint=true \
-            -DdataDirectory="$HOME/.dependency-check/data" \
-            ${NVD_API_KEY:+-DnvdApiKey="$NVD_API_KEY"} \
-            --no-transfer-progress
+          MVN_ARGS="-DfailBuildOnCVSS=11 -Dformat=JSON -DprettyPrint=true -DdataDirectory=$HOME/.dependency-check/data"
+          if [ -n "$NVD_API_KEY" ]; then
+            MVN_ARGS="$MVN_ARGS -DnvdApiKey=$NVD_API_KEY"
+            echo "NVD API key present (length: ${#NVD_API_KEY})"
+          else
+            echo "WARNING: NVD_API_KEY not set — scan will be slow"
+          fi
+          mvn org.owasp:dependency-check-maven:check $MVN_ARGS --no-transfer-progress
         continue-on-error: true
 
       - name: Upload full report artifact
