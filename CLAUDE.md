@@ -4,31 +4,13 @@ A platform that uses **Claude AI as an autonomous agent** to run security and co
 
 ---
 
-## The Concept: AI as a Nightly Engineer
+## The Concept
 
-Traditional CI runs scripts and produces reports. This project takes a different approach: Claude is given **tools**, **context** (this CLAUDE.md, the codebase, the OpenAPI spec), and a **goal** — and it decides what to do, just like a human engineer would.
-
-Each night Claude:
+Each night Claude runs three jobs automatically:
 - Attacks the payment API looking for security vulnerabilities
 - Reviews every open pull request against the team's code review rules
 - Scans all dependencies for known CVEs and triages the findings
 - Writes a morning briefing summarising what it found and what needs attention
-
-The key difference from traditional automation is that Claude **reasons** rather than pattern-matches. It understands *why* a test failure is a security finding, *why* a code change violates a rule, and *why* a CVE matters for this specific project — and communicates that reasoning in plain English.
-
----
-
-## What AI Capabilities This Provides
-
-| Capability | How it works |
-|---|---|
-| **Autonomous action** | Claude calls `gh pr review`, `gh issue create`, etc. directly — it doesn't just report, it acts |
-| **Context awareness** | Claude reads CLAUDE.md, the OpenAPI spec, and existing issues before making decisions |
-| **Intelligent triage** | For CVEs and pentest findings, Claude decides severity and whether a finding is new or already tracked |
-| **Judgment calls** | PR reviews distinguish intentional failures (SSRF tests, IDOR staging findings) from real bugs |
-| **Natural language output** | Morning briefings, issue bodies, and review comments are written for humans, not log parsers |
-| **Deduplication** | Claude checks existing issues before creating new ones — no duplicate CVE or pentest issues |
-| **Configurable scope** | Any job can be toggled off for a manual run without changing code |
 
 ---
 
