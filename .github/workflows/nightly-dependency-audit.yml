@@ -38,14 +38,11 @@ jobs:
           key: nvd-db-${{ runner.os }}-${{ env.WEEK }}
           restore-keys: nvd-db-${{ runner.os }}-
 
-      - name: Resolve dependencies into target/dependency
-        # Copies all dependency JARs so Dependency-Check can scan them.
-        run: mvn dependency:copy-dependencies --no-transfer-progress
-
       - name: Run OWASP Dependency-Check
-        # -DfailBuildOnCVSS=11 means never fail the build (CVSS max is 10).
-        # We want the report regardless — Claude decides what to escalate.
-        # NVD_API_KEY is required to avoid severe rate-limiting on the NVD feed.
+        # The Maven plugin resolves the project's dependency tree itself via Maven's
+        # artifact resolver — no need to copy JARs first. -DfailBuildOnCVSS=11 means
+        # never fail the build (CVSS max is 10); Claude decides what to escalate.
+        # NVD_API_KEY avoids severe rate-limiting on the NVD feed.
         # Obtain a free key at: https://nvd.nist.gov/developers/request-an-api-key
         # Then add it as a repository secret: gh secret set NVD_API_KEY --body "..."
         env:
@@ -53,7 +50,6 @@ jobs:
         run: |
           MVN_ARGS="-DfailBuildOnCVSS=11 -Dformat=JSON -DprettyPrint=true"
           MVN_ARGS="$MVN_ARGS -DdataDirectory=$HOME/.dependency-check/data"
-          MVN_ARGS="$MVN_ARGS -Dscan=target/dependency"
           if [ -n "$NVD_API_KEY" ]; then
             MVN_ARGS="$MVN_ARGS -DnvdApiKey=$NVD_API_KEY"
             echo "NVD API key present (length: ${#NVD_API_KEY})"
