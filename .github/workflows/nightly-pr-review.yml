@@ -75,7 +75,9 @@ jobs:
                no bare assumeTrue(false)
             3. CI / workflow — PENTEST_CREATE_ISSUES opt-in, separate Stripe/Payment API steps,
                -Dgroups not -DexcludedGroups only, test classes ending in *Test
-            4. Code style — records, switch expressions, no checked exceptions in @TestFactory lambdas
+            4. Code style — records, switch expressions, no checked exceptions in @TestFactory lambdas,
+               use var instead of explicit types, List.of()/Map.of() for immutable collections,
+               no System.out.println (use SLF4J), streams over imperative loops, no magic numbers
 
             Known intentional failures (do NOT flag as bugs):
             - Stripe SSRF tests fail in CI by design — they surface the finding
