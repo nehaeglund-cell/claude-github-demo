@@ -49,7 +49,10 @@ payment-api-pentest/
 └── .github/workflows/
     ├── claude.yml                                   Claude PR assistant (@claude mentions)
     ├── claude-code-review.yml                       Claude auto code review on PRs (show_full_output: true)
-    └── nightly-pentest.yml                          Nightly job: Payment API step + Stripe step
+    ├── nightly-orchestrator.yml                     Entry point: runs all nightly jobs; morning briefing issue
+    ├── nightly-pentest.yml                          Nightly job: Payment API step + Stripe step
+    ├── nightly-pr-review.yml                        Nightly job: Claude reviews all open PRs
+    └── nightly-dependency-audit.yml                 Nightly job: OWASP scan + Claude CVE triage
 ```
 
 ---
@@ -120,7 +123,14 @@ mvn test -Dgroups=stripe -DexcludedGroups=destructive   # Stripe tests only
 
 ### GitHub Actions secrets
 
-Add under **Settings → Environments → pentest-staging**:
+**Repository-level** secrets (`Settings → Secrets and variables → Actions`):
+
+```bash
+gh secret set ANTHROPIC_API_KEY --body "..."          # Claude workflows (PR review, dependency audit)
+gh secret set NVD_API_KEY       --body "..."          # OWASP Dependency-Check — free key at nvd.nist.gov/developers/request-an-api-key
+```
+
+**Environment-level** secrets (add under `Settings → Environments → pentest-staging`):
 
 ```bash
 # Payment API
@@ -130,9 +140,6 @@ gh secret set PENTEST_API_KEY  --env pentest-staging --body "..."
 # Stripe
 gh secret set STRIPE_API_KEY          --env pentest-staging --body "sk_test_..."
 gh secret set STRIPE_TEST_ACCOUNT_ID  --env pentest-staging --body "cus_..."
-
-# Claude workflows
-gh secret set ANTHROPIC_API_KEY --body "..."
 ```
 
 ---
@@ -175,6 +182,30 @@ gh secret set ANTHROPIC_API_KEY --body "..."
 - Prints findings summary to the **GitHub Actions job summary tab**
 - Requires GitHub Environment `pentest-staging` with `issues: write` permission
 
+### `nightly-orchestrator.yml`
+- Single entry point that runs all nightly jobs at **02:00 UTC**; also manually triggerable
+- Three parallel `workflow_call` jobs: `nightly-pentest`, `nightly-pr-review`, `nightly-dependency-audit`
+- **Configurable via `workflow_dispatch` inputs** — uncheck any job to skip it for a manual run; scheduled runs always execute all three
+- `morning-briefing` job runs after all three complete (`if: always()`) and creates a `🌙 Nightly AI Report — YYYY-MM-DD` GitHub issue summarising results and recommended actions
+- Top-level `permissions:` block sets the ceiling for all called workflows
+
+### `nightly-pr-review.yml`
+- Called by the orchestrator; also directly triggerable via `workflow_dispatch`
+- **Job 1** lists all open non-draft PRs; **Job 2** reviews each in a matrix (max 3 parallel)
+- Claude reads the PR diff and `CLAUDE.md` rules, then calls `gh pr review` directly:
+  - `--request-changes` for any `[BLOCKING]` finding
+  - `--comment` for `[ADVISORY]`/`[NIT]` only
+  - `--approve` when no issues found
+- Requires `ANTHROPIC_API_KEY` repository secret
+
+### `nightly-dependency-audit.yml`
+- Called by the orchestrator; also directly triggerable via `workflow_dispatch`
+- Runs `mvn dependency:copy-dependencies` then `owasp:dependency-check-maven:check`
+- NVD database is **cached weekly** (`~/.dependency-check/data`) — first run of each week is slow; subsequent runs restore in seconds
+- Requires `NVD_API_KEY` repository secret (free at `nvd.nist.gov`) for fast NVD feed access
+- Claude reads the JSON report and creates GitHub issues for HIGH/CRITICAL CVEs (deduplicates against existing issues)
+- Uploads `dependency-check-report.json` artifact for 30 days
+
 ### `claude-code-review.yml`
 - Triggers on every PR (`opened`, `synchronize`, `ready_for_review`, `reopened`)
 - `show_full_output: true` — full Claude reasoning visible in Actions logs
@@ -182,7 +213,7 @@ gh secret set ANTHROPIC_API_KEY --body "..."
 
 ### `claude.yml`
 - Responds to `@claude` mentions in PR/issue comments and reviews
-- Configured with `prompt` and `claude_args` for PR description automation
+- Can resolve merge conflicts, answer questions, or suggest improvements when mentioned
 
 ---
 
@@ -262,3 +293,8 @@ Post a top-level summary at the end of the review: `APPROVE`, `REQUEST_CHANGES` 
 - **Switch expressions over if-else chains** — use `switch (operationId)` in template classes; add a `default -> {}` branch explicitly.
 - **No checked exceptions in test helpers** — wrap in `RuntimeException` or use `assertDoesNotThrow`; checked exceptions in `@TestFactory` lambdas break the test tree silently.
 - **Template classes must be `final` with private constructors** — they are stateless utility classes, not meant to be instantiated or extended.
+- **`var` for local variables** — use `var` instead of explicit types where the type is obvious from the right-hand side (e.g., `var list = new ArrayList<String>()` not `ArrayList<String> list = ...`).
+- **Immutable collections** — use `List.of()`, `Map.of()`, `Set.of()` for fixed-size collections; never `new ArrayList<>()` or `new HashMap<>()` when the collection is not mutated after creation.
+- **No `System.out.println`** — use SLF4J (`log.info(...)`, `log.warn(...)`) for all logging; bare print statements are invisible in CI and pollute test output.
+- **Streams over imperative loops** — prefer `stream().filter().map().collect()` over `for`-loops that accumulate into a mutable list; exception only when stream legibility suffers.
+- **No magic numbers** — extract numeric literals that encode business meaning into named constants (`private static final int MAX_RETRIES = 3`); raw literals in assertions are acceptable only when self-evident (e.g., `200`, `404`).
