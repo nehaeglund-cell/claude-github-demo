@@ -32,25 +32,53 @@ The key difference from traditional automation is that Claude **reasons** rather
 
 ---
 
-## Nightly Job Overview
+## Architecture
 
-```
-02:00 UTC
-    │
-    ▼
-nightly-orchestrator.yml          ← single entry point
-    │
-    ├──► nightly-pentest.yml       ← Claude generates & runs API attack tests
-    │        └── creates GitHub issues for High/Medium findings
-    │
-    ├──► nightly-pr-review.yml     ← Claude reviews every open PR
-    │        └── posts --request-changes or --approve directly on the PR
-    │
-    ├──► nightly-dependency-audit.yml  ← OWASP scan + Claude CVE triage
-    │        └── creates GitHub issues for HIGH/CRITICAL CVEs
-    │
-    └──► morning-briefing          ← Claude reads all results
-             └── creates "🌙 Nightly AI Report — YYYY-MM-DD" issue
+```mermaid
+flowchart TD
+    SCHED["🕑 02:00 UTC (cron)"]
+    MANUAL["▶ Manual trigger\n(select jobs via checkboxes)"]
+
+    SCHED --> ORCH
+    MANUAL --> ORCH
+
+    ORCH["**nightly-orchestrator.yml**\nSingle entry point"]
+
+    ORCH --> PENTEST
+    ORCH --> PRREVIEW
+    ORCH --> DEPAUDIT
+
+    subgraph PARALLEL ["Nightly jobs — run in parallel"]
+        PENTEST["🔒 **Pentest**\nnightly-pentest.yml"]
+        PRREVIEW["👁 **PR Review**\nnightly-pr-review.yml"]
+        DEPAUDIT["📦 **Dependency Audit**\nnightly-dependency-audit.yml"]
+    end
+
+    PENTEST --> CLAUDE_P["Claude\n① Reads OpenAPI spec\n② Generates & runs attack tests\n③ Classifies failures as findings"]
+    PRREVIEW --> CLAUDE_R["Claude\n① Reads PR diff\n② Applies CLAUDE.md rules\n③ Posts review verdict"]
+    DEPAUDIT --> OWASP["OWASP Dependency-Check\n(NVD database, weekly cache)"]
+    OWASP --> CLAUDE_D["Claude\n① Reads CVE report\n② Deduplicates against issues\n③ Creates GitHub issues"]
+
+    CLAUDE_P --> ISS_P["GitHub Issues\n[Security Finding] High / Medium"]
+    CLAUDE_R --> REV["PR Reviews\n--request-changes / --approve"]
+    CLAUDE_D --> ISS_D["GitHub Issues\n[Dependency] CRITICAL / HIGH"]
+
+    PENTEST --> BRIEF
+    PRREVIEW --> BRIEF
+    DEPAUDIT --> BRIEF
+
+    BRIEF["☀ **Morning Briefing**\nClaude reads all results\n& recommended actions"]
+    BRIEF --> REPORT["🌙 Nightly AI Report Issue\ncreated in GitHub daily"]
+
+    style PARALLEL fill:#f5f5f5,stroke:#ccc
+    style CLAUDE_P fill:#e8f4fd,stroke:#4a9eda
+    style CLAUDE_R fill:#e8f4fd,stroke:#4a9eda
+    style CLAUDE_D fill:#e8f4fd,stroke:#4a9eda
+    style BRIEF    fill:#e8f4fd,stroke:#4a9eda
+    style REPORT   fill:#fff9e6,stroke:#f0c040
+    style ISS_P    fill:#fdecea,stroke:#e57373
+    style ISS_D    fill:#fdecea,stroke:#e57373
+    style REV      fill:#e8f5e9,stroke:#66bb6a
 ```
 
 ---
