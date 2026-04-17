@@ -24,8 +24,8 @@ on:
         description: '2. PR Review'
         type: boolean
         default: true
-      run_dependency_audit:
-        description: '3. Dependency Audit'
+      run_security_updates:
+        description: '3. Security Updates Check'
         type: boolean
         default: true
 
@@ -57,10 +57,10 @@ jobs:
     uses: ./.github/workflows/nightly-pr-review.yml
     secrets: inherit
 
-  dependency-audit:
-    name: Dependency Audit
-    if: ${{ github.event_name == 'schedule' || inputs.run_dependency_audit == true }}
-    uses: ./.github/workflows/nightly-dependency-audit.yml
+  security-updates:
+    name: Security Updates Check
+    if: ${{ github.event_name == 'schedule' || inputs.run_security_updates == true }}
+    uses: ./.github/workflows/nightly-security-updates.yml
     secrets: inherit
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ jobs:
 
   morning-briefing:
     name: Morning Briefing
-    needs: [pentest, pr-review, dependency-audit]
+    needs: [pentest, pr-review, security-updates]
     if: always()   # run even if some nightly jobs failed or were skipped
     runs-on: ubuntu-latest
     permissions:
@@ -98,7 +98,7 @@ jobs:
 
           PENTEST_ICON=$(result_icon "${{ needs.pentest.result }}")
           PR_ICON=$(result_icon "${{ needs.pr-review.result }}")
-          AUDIT_ICON=$(result_icon "${{ needs.dependency-audit.result }}")
+          UPDATES_ICON=$(result_icon "${{ needs.security-updates.result }}")
 
           {
             echo "## 🌙 Nightly AI Orchestrator — $(date -u +%Y-%m-%d)"
@@ -107,7 +107,7 @@ jobs:
             echo "|-----|--------|"
             echo "| Payment API Pentest    | $PENTEST_ICON \`${{ needs.pentest.result }}\` |"
             echo "| PR Review              | $PR_ICON \`${{ needs.pr-review.result }}\` |"
-            echo "| Dependency Audit       | $AUDIT_ICON \`${{ needs.dependency-audit.result }}\` |"
+            echo "| Security Updates Check | $UPDATES_ICON \`${{ needs.security-updates.result }}\` |"
             echo ""
             echo "_Morning briefing issue created below by Claude._"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -128,7 +128,7 @@ jobs:
             The three nightly jobs have just completed with these results:
             - Pentest:           ${{ needs.pentest.result }}
             - PR Review:         ${{ needs.pr-review.result }}
-            - Dependency Audit:  ${{ needs.dependency-audit.result }}
+            - Security Updates:  ${{ needs.security-updates.result }}
 
             (A result of "skipped" means the job was disabled for this run via workflow_dispatch inputs.)
 
@@ -147,6 +147,6 @@ jobs:
                Body (bullet points, concise):
                - **Pentest**: ${{ needs.pentest.result }} — note any new vulnerability issues opened
                - **PR Review**: ${{ needs.pr-review.result }} — note any BLOCKING findings
-               - **Dependency Audit**: ${{ needs.dependency-audit.result }} — note any new CVE issues
+               - **Security Updates**: ${{ needs.security-updates.result }} — note any flagged dependency upgrades
                - **Recommended actions**: what @neha-eglund should look at today
           show_full_output: true
