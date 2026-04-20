@@ -29,8 +29,8 @@ jobs:
 
       - name: Check for dependency updates
         run: |
+          mkdir -p target
           mvn versions:display-dependency-updates \
-            versions:display-plugin-updates \
             --no-transfer-progress \
             2>&1 | tee target/security-updates-report.txt
 
@@ -58,11 +58,11 @@ jobs:
             Read the Maven versions report at:
               target/security-updates-report.txt
 
-            The report lists dependencies and plugins with available updates in the format:
+            The report lists dependencies with available updates in the format:
               [INFO] <groupId>:<artifactId> ... <currentVersion> -> <latestVersion>
 
             Steps:
-            1. Parse the report and extract all dependencies and plugins that have updates available.
+            1. Parse the report and extract all dependencies that have updates available.
             2. Flag any dependency where the update is likely security-related — look for:
                - Major or minor version jumps (e.g. 1.x -> 2.x, or 3.1 -> 3.5)
                - Known security-sensitive libraries (e.g. jackson-databind, log4j, spring-*, netty, okhttp, snakeyaml, commons-*)
