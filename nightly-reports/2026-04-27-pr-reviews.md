@@ -7,7 +7,7 @@
 | PR | Title | Verdict |
 |---|---|---|
 | #78 | Enable issue creation in code review workflow and consolidate base URLs | REQUEST_CHANGES — 2 BLOCKING |
-| #77 | Add PaymentFinding class for structured pentest report output | COMMENT — advisory items |
+| #77 | Add PaymentFinding class for structured pentest report output | REQUEST_CHANGES — printSummary() must not use System.out.println |
 | #76 | Add TestConfig helper with credential fallbacks and ownership check test | COMMENT — blocking items to verify |
 | #29 | Add SeverityClassifier utility for findings grouping | COMMENT — style items |
 | #24 | Add getInt helper to ConfigLoader | COMMENT — implementation pattern |
@@ -34,14 +34,13 @@ The Stripe step must always target https://api.stripe.com as a hardcoded literal
 
 ---
 
-## PR #77 — COMMENT
+## PR #77 — REQUEST_CHANGES
 
-*PR branch files not accessible — reviewing based on description and CLAUDE.md rules.*
+PR body: "includes `isCritical()` and `printSummary()` helpers" — `printSummary()` name indicates System.out.println use.
 
-- **[ADVISORY]** PaymentFinding should be a Java record (not a POJO) — CLAUDE.md: *Records over POJOs for immutable data carriers*
-- **[ADVISORY]** No System.out.println — use SLF4J
-- **[NIT]** Use switch expressions for severity classification logic
-- **[NIT]** Use immutable collections (List.of(), Map.of())
+- **[BLOCKING]** `printSummary()` must not use `System.out.println` — rename to `toSummaryString()` returning String, or use `log.info()` via SLF4J
+- **[ADVISORY]** PaymentFinding should be a Java record (data carrier with helper methods — records support this)
+- **[ADVISORY]** Evidence list must use `List.copyOf()` in compact record constructor
 
 ---
 

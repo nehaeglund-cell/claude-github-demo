@@ -49,7 +49,7 @@ No new CVEs with unique IDs found beyond #71. Two medium-severity findings added
 | PR | Title | Verdict | Must Fix Before Merge |
 |---|---|---|---|
 | #78 | Enable issue creation in code review workflow | ❌ REQUEST_CHANGES | Yes — 2 BLOCKING |
-| #77 | Add PaymentFinding class | 💬 COMMENT | No — advisory only |
+| #77 | Add PaymentFinding class | ❌ REQUEST_CHANGES | printSummary() must not use System.out.println |
 | #76 | Add TestConfig helper + ownership check | 💬 COMMENT | Verify ownership check covers negative case |
 | #29 | Add SeverityClassifier utility | 💬 COMMENT | No — style items |
 | #24 | Add getInt helper to ConfigLoader | 💬 COMMENT | No — approve if pattern correct |
