@@ -12,8 +12,9 @@ name: Nightly AI Orchestrator
 #   4. Mention it in the Claude prompt
 
 on:
-  schedule:
-    - cron: '0 2 * * *'   # 02:00 UTC every night
+  # Nightly schedule disabled — manual runs only via workflow_dispatch.
+  # schedule:
+  #   - cron: '0 2 * * *'   # 02:00 UTC every night
   workflow_dispatch:
     inputs:
       run_pentest:
